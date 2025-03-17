@@ -21,22 +21,22 @@ library(magrittr)
 
 - All metadata information are fixed information. These variables include:
 
-| Variables | Definition  | Possible Values  |
-|-----------|-------------|------------------|
-| PID       | patient id  |   |
-| age_category | age at time of injury either above or below 65 years  | <65, >65  |
-| sexcd | sex | 1, female; 2, male  |
-| bmi_category  | bmi categorized   | underweight, healthy, overweight  |
-| srdecc1 | were spinal roots decompressed during surgery | 0, no; 1, yes |
-| surgcd1 | was spinal surgery performed  | 0, no; 1, yes |
-| spcsuc1 | Are there more than one area of spinal column surgery   | 0, no; 1, yes |
-| scdecc1 | was the spinal cord decompressed  | 0, no; 1, yes |
-| hemccd1 | did significant changes in the hemodynamic or pulmonary function occur during the operation | 0, no; 1, yes |
-| mhpsyccd  | has the patient had a past history of psychiatric abnormalities | 0, no; 1, yes; 9, unknown |
-| mhneurcd  | has the patient had a past history of neurological abnormalities  | 0, no; 1, yes; 9, unknown |
-| mhcardcd  | has the patient had a past history of cardiac abnormalities | 0, no; 1, yes; 9, unknown |
-| mhmetacd  | has the patient had a past history of metabolic or endocrinologic abnormalities | 0, no; 1, yes; 9, unknown |
-| tx1_r | treatment group | D1, dose 1; D2, dose 2; P, placebo  |
+| Variables    | Definition                                                                                  | Possible Values                     |
+|--------------|---------------------------------------------------------------------------------------------|-------------------------------------|
+| PID          | patient id                                                                                  |                                     |
+| age_category | age at time of injury either above or below 65 years                                        | <65, >65                            |
+| sexcd        | sex                                                                                         | 1, female; 2, male                  |
+| bmi_category | bmi categorized                                                                             | underweight, healthy, overweight    |
+| srdecc1      | were spinal roots decompressed during surgery                                               | 0, no; 1, yes                       |
+| surgcd1      | was spinal surgery performed                                                                | 0, no; 1, yes                       |
+| spcsuc1      | Are there more than one area of spinal column surgery                                       | 0, no; 1, yes                       |
+| scdecc1      | was the spinal cord decompressed                                                            | 0, no; 1, yes                       |
+| hemccd1      | did significant changes in the hemodynamic or pulmonary function occur during the operation | 0, no; 1, yes                       |
+| mhpsyccd     | has the patient had a past history of psychiatric abnormalities                             | 0, no; 1, yes; 9, unknown           |
+| mhneurcd     | has the patient had a past history of neurological abnormalities                            | 0, no; 1, yes; 9, unknown           |
+| mhcardcd     | has the patient had a past history of cardiac abnormalities                                 | 0, no; 1, yes; 9, unknown           |
+| mhmetacd     | has the patient had a past history of metabolic or endocrinologic abnormalities             | 0, no; 1, yes; 9, unknown           |
+| tx1_r        | treatment group                                                                             | D1, dose 1; D2, dose 2; P, placebo  |
 
 
 ```{r metadata_summs}

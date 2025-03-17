@@ -7,3 +7,4 @@ Link: https://www.kaggle.com/competitions/asia-data-science-challenge-2025/overv
 
 - Benzon Carlitos Salazar (salazarbc24@uww.edu)
 - Charlie Wilson (wilsonc98@uww.edu)
+- [**Advisor**] Dr. Manasi Sheth (shethm@uww.edu)
