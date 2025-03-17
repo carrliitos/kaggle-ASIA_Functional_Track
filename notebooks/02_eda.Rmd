@@ -1,0 +1,290 @@
+---
+title: "Exploratory Data Analysis 2"
+author: "Benzon Carlitos Salazar"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: hide
+    df_print: paged
+    toc: TRUE
+    toc_float: TRUE
+---
+
+```{r setup, include=FALSE}
+library(magrittr)
+
+metadata_df <- nanoparquet::read_parquet(here::here("data-raw", "metadata.parquet"))
+train_features_df <- nanoparquet::read_parquet(here::here("data-raw", "train_features.parquet"))
+train_outcomes_df <- nanoparquet::read_parquet(here::here("data-raw", "train_outcomes.parquet"))
+```
+
+## Merging static and time-varying features
+
+Merging `metadata.parquet` with `train_features.parquet` by `PID`, and conducting EDA on this merged dataset to 
+understand distributions, correlations, missing values, and potential feature importance.
+
+```{r merged, echo=FALSE}
+merged_df <-
+  metadata_df %>%
+  dplyr::left_join(train_features_df, by = "PID") %>%
+  dplyr::arrange("PID") %>%
+  dplyr::mutate(PID = as.numeric(stringr::str_replace(PID, "PID_", "")))
+
+dim(merged_df)
+```
+
+```{r subsets}
+sub1 <- merged_df[, 1:50]
+sub2 <- merged_df[, 51:100]
+sub3 <- merged_df[, 101:150]
+sub4 <- merged_df[, 151:200]
+sub5 <- merged_df[, 201:250]
+sub6 <- merged_df[, 251:300]
+sub7 <- merged_df[, 301:350]
+sub8 <- merged_df[, 351:400]
+sub9 <- merged_df[, 401:450]
+sub10 <- merged_df[, 451:500]
+sub11 <- merged_df[, 501:550]
+sub12 <- merged_df[, 551:554]
+```
+
+## Missing Data Analysis
+
+```{r missing_data}
+merged_df[2:14] %>%
+  naniar::vis_miss(cluster = TRUE, sort_miss = TRUE)
+
+missing_data <- colSums(is.na(merged_df)) / nrow(merged_df) * 100
+missing_data_df <- data.frame(
+  Column_Name = names(missing_data[missing_data > 0]),
+  Missing_Percentage = missing_data[missing_data > 0],
+  row.names = NULL
+)
+
+missing_data_df %>%
+  dplyr::arrange(desc(Missing_Percentage)) %>%
+  dplyr::slice_head(n = 10)
+```
+
+## Correlation Analysis for Numeric Features
+
+### Columns 1 - 50
+
+```{r corr_1}
+numeric_cols <- sapply(sub1, is.numeric)
+
+if (sum(numeric_cols) > 0) {
+  corr_matrix_sub1 <- stats::cor(sub1[, numeric_cols], use = "pairwise.complete.obs")
+} else {
+  cat("No numeric columns found in sub1.\n")
+}
+
+corrplot::corrplot(corr_matrix_sub1)
+```
+
+
+### Columns 51 - 100
+
+```{r corr_2}
+numeric_cols2 <- sapply(sub2, is.numeric)
+
+if (sum(numeric_cols2) > 0) {
+  corr_matrix_sub2 <- stats::cor(sub2[, numeric_cols2], use = "pairwise.complete.obs")
+} else {
+  cat("No numeric columns found in sub1.\n")
+}
+corrplot::corrplot(corr_matrix_sub2)
+```
+
+### Columns 101 - 121
+
+```{r corr_3}
+sub3a <- merged_df[, 101:121]
+numeric_cols3a <- sapply(sub3a, is.numeric)
+
+if (sum(numeric_cols3a) > 0) {
+  corr_matrix_sub3a <- stats::cor(sub3a[, numeric_cols3a], use = "pairwise.complete.obs")
+} else {
+  cat("No numeric columns found in sub3a.\n")
+}
+corrplot::corrplot(corr_matrix_sub3a)
+```
+
+## Motor Scores vs Light Touch
+
+```{r}
+light_touch_df <- 
+  merged_df %>%
+  dplyr::select(
+    # Light touch
+    dplyr::contains('ltl01') %>% head(10),
+    dplyr::contains('ltr01') %>% head(10),
+    # Motor Scores
+    dplyr::contains("elbfll01") %>% head(5),
+    dplyr::contains("wrextl01") %>% head(5),
+    dplyr::contains("elbexl01") %>% head(5),
+    dplyr::contains("finfll01") %>% head(5),
+    dplyr::contains("finabl01") %>% head(5),
+    dplyr::contains("hipfll01") %>% head(5),
+    dplyr::contains("kneexl01") %>% head(5),
+    dplyr::contains("ankdol01") %>% head(5),
+    dplyr::contains("gretol01") %>% head(5),
+    dplyr::contains("ankpll01") %>% head(5)
+  ) %>%
+  dplyr::select(where(is.numeric))
+
+corr_matrix_light_touch_df <- stats::cor(light_touch_df, use = "pairwise.complete.obs")
+
+corrplot::corrplot(
+  corr_matrix_light_touch_df[1:20, 1:20],
+  method = "color",
+  type = "upper",        # Show only upper triangle
+  tl.cex = 0.7,          # Text size for labels
+  number.cex = 0.6,      # Text size for correlation coefficients
+  addCoef.col = "black", # Show correlation coefficients
+  tl.col = "black",      # Label color
+  diag = FALSE           # Hide diagonal
+)
+```
+
+## Principal Component Analysis (PCA) for Dimensionality Reduction
+
+### Goals:
+
+1. Mitigate the curse of dimensionality -- we have such high number of features.
+2. Remove redundant features (collinearity) -- we already found out that there are no highly correlated features.
+3. Noise reduction -- PCA helps filter out noise present in less significant components.
+
+**Data Imputation**: When PCA was completed, imputation was done. 
+
+`missMDA::imputePCA` performs regularized iterative PCA to impute missing values, combining two main techniques:
+
+1. Principal Component Analysis (PCA): Reduces dimensionality and captures the underlying structure of the data.
+2. Iterative Expectation-Maximization (EM): Iteratively estimates missing values based on principal components until convergence.
+
+The goal is to capture underlying patterns to impute missing values effectively.
+
+```{r pca_analysis}
+merged_df[] <- lapply(merged_df, function(x) {
+  if (is.factor(x) || is.character(x)) {
+    as.numeric(as.factor(x))
+  } else {
+    x
+  }
+})
+
+# imputed_data <- missMDA::imputePCA(merged_df[, -1])$completeObs  # Exclude PID column
+# imputed_data %>% saveRDS(here::here("data", "imputed_data.rds"))
+imputed_data <- readRDS(here::here("data", "imputed_data.rds"))
+
+pca_res <- FactoMineR::PCA(imputed_data, ncp=10, graph = TRUE)
+
+eigenvalues <- pca_res$eig
+eigenvalues_df <- data.frame(
+  Principal_Component = 1:nrow(eigenvalues),
+  Eigenvalue = eigenvalues[, 1],
+  Variance_Explained = eigenvalues[, 2],
+  Cumulative_Variance = eigenvalues[, 3]
+)
+
+# Contributions of variables to principal components
+contributions <- pca_res$var$contrib
+contributions_df <- as.data.frame(contributions)
+contributions_df$Variable <- rownames(contributions_df)
+
+# Coordinates of variables in PCA space
+coordinates <- pca_res$var$coord
+coordinates_df <- as.data.frame(coordinates)
+coordinates_df$Variable <- rownames(coordinates_df)
+
+eigenvalues_df %>% readr::write_csv(here::here("data", "eigenvalues_df.csv"))
+contributions_df %>% readr::write_csv(here::here("data", "contributions_df.csv"))
+coordinates_df %>% readr::write_csv(here::here("data", "coordinates_df.csv"))
+```
+
+### Eigenvalues and Explained Variance (`eigenvalues_df`)
+
+```{r eigen, echo=FALSE}
+eigenvalues_df[1:5,] %>%
+  dplyr::as_tibble()
+```
+
+- The **first 2 components** explain 58.52% of the total variance.
+- The first **5 components** explain over 72% of the variance.
+- A small number of principal components can capture most of the information, indicating **good dimensionality reduction potential**.
+
+### Contributions of Variables to Principal Components (`contributions_df`)
+
+```{r contributions, echo=FALSE}
+contributions_df[1:10, 1:6]
+```
+
+- Variables like `hemccd1` (hemodynamic or pulmonary function occur during the operation), `srdecc1` (spinal root 
+decompression), and `spcsuc1` (spinal column surgery) have higher contributions to some components, suggesting they may 
+be influential.
+- `spcsuc1` (spinal column surgery) contributes significantly to `Dim.2`.
+- We may be able to remove variables with low contributions (<0.001).
+
+### Most Contributions to PC1 (`contributions_df`)
+
+```{r cont, echo=FALSE}
+least_df <-
+  contributions_df %>%
+  dplyr::arrange(`Dim.1`)
+most_df <-
+  contributions_df %>%
+  dplyr::arrange(desc(`Dim.1`))
+```
+
+```{r lest_con, echo=FALSE}
+least_df[1:10, 1:6]
+```
+
+- These have extremely low contributions to `Dim.1` (almost negligible).
+- We may be able to remove these variables without significant information loss.
+
+```{r most_cont, echo=FALSE}
+most_df[1:10, 1:6]
+```
+
+- Substantially higher contributions.
+- All top 10 have contributions over **0.32**, making them the most influential for the first principal component.
+- Will retain these, and the next 300?
+
+### Coordinates of Variables in PCA Space (`coordinates_df`)
+
+```{r coordinates, echo=FALSE}
+coordinates_df[1:10, 1:6]
+```
+
+- Variables with higher coordinates are more influential in those dimensions.
+- `srdecc1` (spinal root decompression) has strong influence in `Dim.1` and `Dim.2`.
+- `age_category` has a notable influence on `Dim.2`.
+
+### Next steps?
+
+- Will likely be using the first 5 principal components (explains 72% variance) to reduce dimensionality without significant information loss.
+  - Focusing on `Dim.1` for now as a good starting point.
+- Focus on influential variables from `Dim.1`.
+- Remove low-contribution features.
+- Train a baseline model with `Dim.1` features.
+
+```{r first_5_pca, include=FALSE}
+pca_5_df <- as.data.frame(pca_res$ind$coord[, 1:5])
+colnames(pca_5_df) <- paste0("PC", 1:5)
+
+pca_5_df$PID <- merged_df$PID[match(rownames(pca_5_df), rownames(merged_df))]
+
+train_ready_df <- 
+  pca_5_df %>%
+  dplyr::mutate(PID = paste0("PID_", PID)) %>%
+  dplyr::left_join(train_outcomes_df, by = "PID")
+```
+
+```{r disconnect_save, include=FALSE}
+train_ready_df %>%
+  saveRDS(here::here("data", "training__PCA.rds"))
+
+rm(list = ls(all.names = TRUE)) # Clear all objects including hidden objects
+invisible(gc()) # free up memory
+```

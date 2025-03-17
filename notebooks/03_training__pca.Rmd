@@ -1,0 +1,164 @@
+---
+title: "PCA Training"
+author: "Benzon Carlitos Salazar"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: hide
+    df_print: paged
+    toc: TRUE
+    toc_float: TRUE
+---
+
+<style>
+.main-container {
+    width: 95%;
+    max-width: unset;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(magrittr)
+training__PCA_df <- readRDS(here::here("data", "training__PCA.rds"))
+```
+
+```{r convertmodben}
+training__PCA_df$modben <- as.factor(training__PCA_df$modben)
+train_ready_df <- 
+  training__PCA_df %>%
+  dplyr::filter(!is.na(modben))
+```
+
+## Training using PCA Features
+
+```{r training}
+predictors <- train_ready_df %>% dplyr::select(PC1:PC5)
+outcome <- train_ready_df$modben
+
+# Split training (80%) and testing (20%)
+set.seed(42)
+train_index <- caret::createDataPartition(outcome, p = 0.8, list = FALSE)
+train_set <- train_ready_df[train_index, ]
+test_set <- train_ready_df[-train_index, ]
+```
+
+```{r rf_model}
+rf_model <- 
+  randomForest::randomForest(modben ~ PC1 + PC2 + PC3 + PC4 + PC5, data = train_set, ntree = 500)
+
+preds <- predict(rf_model, newdata = test_set)
+```
+
+```{r predict}
+rf_model
+
+caret::confusionMatrix(preds, test_set$modben)
+```
+
+### **1. Key Metrics Interpretation of Random Forest Model**
+
+- **Accuracy**: **59.82%** – The model correctly predicts `modben` 59.82% of the time.
+- **Kappa Score**: **0.4055** – Moderate agreement beyond chance (values closer to 1 indicate better agreement).
+- **No Information Rate (NIR)**: **49.11%** – The accuracy you'd get by always predicting the most frequent class.
+  - Since `P-Value [Acc > NIR]` is **0.01472**, the model performs **significantly better than random guessing**.
+
+### **2. Class-Specific Performance**
+
+- **Class 1 (`modben = 1`) has the best performance**:
+  - Sensitivity (Recall): **94.55%** → The model correctly identifies `modben = 1` in most cases.
+  - Specificity: **75.44%** → It avoids misclassifying other classes as `1` reasonably well.
+  - Positive Predictive Value (Precision): **78.79%** → When predicting `1`, it’s correct 78.79% of the time.
+
+- **Classes 2, 3, 4, 5, 6, and 7 have lower Sensitivity**:
+  - The model struggles to correctly classify `modben = 3, 4`, etc.
+  - **Class 4 (`modben = 4`) has 0% Sensitivity**, meaning it's never correctly predicted.
+  - **Class 3 (`modben = 3`) has very low Precision (20%)**.
+
+- **Class 9 (`modben = 9`) is never predicted**:
+  - Sensitivity = 0%, indicating the model does not classify any samples as `9`.
+
+- **Balanced Accuracy varies**:
+  - `Class 1`: **84.99%** → Very good.
+  - `Class 4`: **47.19%** → Performs poorly.
+  - `Class 9`: **50.00%** → Predicting at random.
+
+### **3. Next Steps to Improve Performance**
+
+#### **(A) Handle Class Imbalance**
+
+- The dataset has a high prevalence of `modben = 1` (**49.11%** of all cases), leading to an imbalance.
+- **Solution: Use SMOTE or Weighted Loss Functions**: This generates synthetic minority class samples.
+
+#### **(B) Hyperparameter Tuning**
+
+- Your **Random Forest model's default settings** might not be optimal.
+- Try increasing trees (`ntree`), tuning `mtry`, or using `caret::train()`.
+
+#### **(C) Try a Different Model**
+
+- **XGBoost (Boosted Trees)** handles class imbalance well and might improve accuracy.
+
+
+### 3B: Hyperparameter Tuning
+
+```{r hyperparameter_use}
+set.seed(43)
+
+tune_grid <- expand.grid(mtry = c(2, 3, 4, 5))
+
+rf_tuned <- 
+  caret::train(modben ~ PC1 + PC2 + PC3 + PC4 + PC5,
+               data = train_set,
+               method = "rf",
+               trControl = caret::trainControl(method = "cv", number = 7), # 7-fold cross validation
+               tuneGrid = tune_grid)
+
+# Predict on test set using the tuned model
+preds_tuned <- predict(rf_tuned, newdata = test_set)
+```
+
+```{r tuned}
+rf_tuned
+caret::confusionMatrix(preds_tuned, test_set$modben)
+```
+
+
+### **Analysis of Tuned Model Performance**
+
+#### **1. Key Metrics (Comparison with Previous Model)**
+
+| Metric | Before Tuning | After Tuning | Change |
+|---------|-------------|--------------|----------|
+| **Accuracy** | **59.82%** | **62.5%** | **↑ +2.68%** |
+| **Kappa** | **0.4055** | **0.4446** | **↑ Improved agreement** |
+| **P-value (Acc > NIR)** | **0.01472** | **0.002975** | **More significant** |
+
+> **Overall**, the tuned model **performs better than random guessing**, and the **agreement beyond chance increased slightly**.
+
+Here’s the updated table based on your improved results:
+
+| Class (`modben`) | Sensitivity (Recall) | Specificity | Change |
+|-----------------|------------------|-------------|--------|
+| **1** (Most common) | **94.55% → 96.36%** | **77.19% → 77.19%** | **Slightly better recall, specificity unchanged** |
+| **2** | **38.46% → 38.46%** | **93.94% → 94.95%** | **Slightly better specificity** |
+| **3** | **37.5% → 25.00%** | **96.15% → 96.15%** | **Recall dropped slightly, specificity unchanged** |
+| **4** | **0.00% → 0.00%** | **94.39% → 95.33%** | **Still never predicted correctly, but specificity improved** ❌ |
+| **5** | **30.77% → 30.77%** | **93.94% → 93.94%** | **No major change** |
+| **6** | **33.33% → 44.44%** | **96.12% → 95.15%** | **Improved recall, slight drop in specificity** |
+| **7** | **40.00% → 40.00%** | **96.26% → 96.26%** | **No change** |
+| **9** | **0.00% → 0.00%** | **100.00% → 100.00%** | **Still never predicted** ❌ |
+
+### **Key Observations:**
+
+- **Class 1 (`modben = 1`)**: Recall improved slightly (**94.55% → 96.36%**), meaning more correct predictions.
+- **Class 3 (`modben = 3`)**: Recall **dropped slightly** (**37.5% → 25%**), meaning the model now misses more `modben = 3` cases.
+- **Class 6 (`modben = 6`)**: **Recall increased from 33.33% → 44.44%**, making it more likely to be correctly classified.
+- **Class 4 & 9**: **Still never predicted correctly** (Sensitivity = 0.00%).
+
+```{r disconnect_save, include=FALSE}
+saveRDS(rf_tuned, here::here("data/models", "RandomForest_tuned_model.rds"))
+
+rm(list = ls(all.names = TRUE)) # Clear all objects including hidden objects
+invisible(gc()) # free up memory
+```
