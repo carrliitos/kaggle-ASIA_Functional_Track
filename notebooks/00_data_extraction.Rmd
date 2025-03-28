@@ -15,8 +15,8 @@ output:
 library(magrittr)
 
 full_data_folder <- paste0(
-  "C:\\Users\\bsalaz5\\Documents\\Projects\\School\\kaggle-ASIA_Functional_Track\\",
-  "data-raw\\ASIAChallenge_ShareFile\\ASIAChallenge_ShareFile\\"
+  "C:/Users/bsalaz5/Documents/Projects/School/kaggle-ASIA_Functional_Track/",
+  "data-raw/ASIAChallenge_ShareFile"
 )
 ```
 
