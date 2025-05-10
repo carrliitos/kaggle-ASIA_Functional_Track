@@ -3,6 +3,8 @@
 
 Link: https://www.kaggle.com/competitions/asia-data-science-challenge-2025/overview
 
+Final placement: [5 out of 14](https://www.kaggle.com/competitions/asia-data-science-challenge-2025/leaderboard)
+
 ## Contributors
 
 - Benzon Carlitos Salazar (salazarbc24@uww.edu)
